@@ -80,6 +80,34 @@ POST /v1/chat/completions
 
 The backend always uses `MODELSCOPE_MODEL` from `.env`; the app cannot override the model.
 
+## Tarot AI Loop
+
+`pages/TarotView` and `pages/AIDialogPage` call the backend AI proxy through
+`AppConfig.AI_CHAT_COMPLETIONS_PROXY_URL`.
+
+For local verification:
+
+```powershell
+cd D:\do_it\first_fruit\echoing\backend
+python server.py
+```
+
+Then check:
+
+```text
+http://127.0.0.1:8111/health
+```
+
+When running on a real HarmonyOS device, do not set the app proxy URL to
+`127.0.0.1`; use the computer LAN IP and keep the `/v1/chat/completions` path,
+for example `http://192.168.1.10:8111/v1/chat/completions`.
+
+Minimal app path to verify:
+
+```text
+Index -> TarotView -> AI interpretation -> AIDialogPage -> ask follow-up -> ChatHistoryPage
+```
+
 ## Admin APIs
 
 Login:

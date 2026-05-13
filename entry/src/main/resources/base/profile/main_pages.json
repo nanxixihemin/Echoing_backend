@@ -1,0 +1,15 @@
+{
+  "src": [
+    "pages/Index",
+    "pages/ZzuMindfulTree",
+    "pages/PrivateTree",
+    "pages/PrivateWrite",
+    "pages/SharedForest",
+    "pages/SharedWrite",
+    "pages/FunChoiceView",
+    "pages/TarotView",
+    "pages/AIDialogPage",
+    "pages/ChatHistoryPage",
+    "pages/LoginPage"
+  ]
+}
