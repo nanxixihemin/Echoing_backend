@@ -26,6 +26,7 @@ interface PrivateLeafData {
 const STORE_NAME: string = 'private_garden_store';
 const LEAVES_KEY: string = 'private_leaves';
 const CUSTOM_TAGS_KEY: string = 'custom_tags';
+const GUEST_ACCOUNT_KEY: string = 'guest';
 
 const PRESET_TAGS: string[] = ['学业', '情感', '生活', '压力', '开心', '迷茫', '目标', '感恩'];
 
@@ -46,6 +47,7 @@ struct PrivateWrite {
   @State aiResponse: string = '';
   @State showAIResponse: boolean = false;
   @State isSubmitting: boolean = false;
+  @StorageProp('currentAccountKey') currentAccountKey: string = '';
 
   private store: dataPreferences.Preferences | null = null;
 
@@ -59,6 +61,32 @@ struct PrivateWrite {
       this.store = await dataPreferences.getPreferences(ctx, STORE_NAME);
     }
     return this.store;
+  }
+
+  private getAccountKey(): string {
+    return this.currentAccountKey.length > 0 ? this.currentAccountKey : GUEST_ACCOUNT_KEY;
+  }
+
+  private getScopedKey(baseKey: string): string {
+    return `${baseKey}.${this.getAccountKey()}`;
+  }
+
+  private async getScopedValue(store: dataPreferences.Preferences, baseKey: string, defaultValue: string): Promise<string> {
+    const scopedKey = this.getScopedKey(baseKey);
+    const scopedData: dataPreferences.ValueType = await store.get(scopedKey, '');
+    if (typeof scopedData === 'string' && scopedData.length > 0) {
+      return scopedData;
+    }
+
+    const legacyData: dataPreferences.ValueType = await store.get(baseKey, '');
+    if (typeof legacyData === 'string' && legacyData.length > 0) {
+      await store.put(scopedKey, legacyData);
+      await store.put(baseKey, '');
+      await store.flush();
+      return legacyData;
+    }
+
+    return defaultValue;
   }
 
   private getTagColor(tagName: string): string {
@@ -87,11 +115,9 @@ struct PrivateWrite {
   private async loadCustomTags(): Promise<void> {
     try {
       const store: dataPreferences.Preferences = await this.getStore();
-      const data: dataPreferences.ValueType = await store.get(CUSTOM_TAGS_KEY, '[]');
-      if (typeof data === 'string') {
-        this.customTags = JSON.parse(data) as string[];
-        this.allTags = [...PRESET_TAGS, ...this.customTags];
-      }
+      const data: string = await this.getScopedValue(store, CUSTOM_TAGS_KEY, '[]');
+      this.customTags = JSON.parse(data) as string[];
+      this.allTags = [...PRESET_TAGS, ...this.customTags];
     } catch (e) {
       console.error('PrivateWrite', 'Load tags failed');
     }
@@ -100,7 +126,7 @@ struct PrivateWrite {
   private async saveCustomTags(): Promise<void> {
     try {
       const store: dataPreferences.Preferences = await this.getStore();
-      await store.put(CUSTOM_TAGS_KEY, JSON.stringify(this.customTags));
+      await store.put(this.getScopedKey(CUSTOM_TAGS_KEY), JSON.stringify(this.customTags));
       await store.flush();
     } catch (e) {
       console.error('PrivateWrite', 'Save tags failed');
@@ -166,13 +192,11 @@ struct PrivateWrite {
 
     try {
       const store: dataPreferences.Preferences = await this.getStore();
-      const data: dataPreferences.ValueType = await store.get(LEAVES_KEY, '[]');
+      const data: string = await this.getScopedValue(store, LEAVES_KEY, '[]');
       let leaves: PrivateLeafData[] = [];
-      if (typeof data === 'string') {
-        leaves = JSON.parse(data) as PrivateLeafData[];
-      }
+      leaves = JSON.parse(data) as PrivateLeafData[];
       leaves = [newLeaf, ...leaves];
-      await store.put(LEAVES_KEY, JSON.stringify(leaves));
+      await store.put(this.getScopedKey(LEAVES_KEY), JSON.stringify(leaves));
       await store.flush();
 
       this.aiResponse = aiRes;

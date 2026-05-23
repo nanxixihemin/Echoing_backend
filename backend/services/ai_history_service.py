@@ -18,6 +18,8 @@ class AIHistoryService:
         error_message: str,
         latency_ms: int,
         client_ip: str,
+        app_user_id: str | None = None,
+        account_key: str = "",
     ) -> None:
         prompt_preview = self._extract_prompt_preview(request_body)
         response_preview = self._extract_response_preview(response_body)
@@ -32,6 +34,8 @@ class AIHistoryService:
                 latency_ms=latency_ms,
                 client_ip=client_ip,
                 created_at=self._format_time(self._now()),
+                app_user_id=app_user_id,
+                account_key=account_key,
             )
 
     def list_recent(self, limit: int) -> dict[str, Any]:

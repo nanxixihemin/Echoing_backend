@@ -18,6 +18,7 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate<boolean>('isLoggedIn', false);
     AppStorage.setOrCreate<string>('userNickname', '');
     AppStorage.setOrCreate<string>('userBio', '');
+    AppStorage.setOrCreate<string>('currentAccountKey', '');
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
   }
 
@@ -48,14 +49,23 @@ export default class EntryAbility extends UIAbility {
     }
 
     // 从 Preferences 恢复登录状态到 AppStorage
-    this.restoreLoginState();
-
-    windowStage.loadContent('pages/Index', (err) => {
-      if (err.code) {
-        hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
-        return;
-      }
-      hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
+    // Restore App user state before choosing the first page.
+    this.restoreLoginState().then((profileReady: boolean) => {
+      const startPage: string = profileReady ? 'pages/Index' : 'pages/LoginPage';
+      windowStage.loadContent(startPage, (err) => {
+        if (err.code) {
+          hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
+          return;
+        }
+        hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content: %{public}s', startPage);
+      });
+    }).catch((err: Error) => {
+      hilog.error(DOMAIN, 'testTag', 'Failed to choose initial page. Cause: %{public}s', err.message);
+      windowStage.loadContent('pages/LoginPage', (loadErr) => {
+        if (loadErr.code) {
+          hilog.error(DOMAIN, 'testTag', 'Failed to load fallback content. Cause: %{public}s', JSON.stringify(loadErr));
+        }
+      });
     });
   }
 
@@ -74,19 +84,33 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');
   }
 
-  private async restoreLoginState(): Promise<void> {
+  private async restoreLoginState(): Promise<boolean> {
     try {
       const prefs = await dataPreferences.getPreferences(this.context, 'echoing_user');
       const logged: dataPreferences.ValueType = await prefs.get('isLoggedIn', false);
-      const nick: dataPreferences.ValueType = await prefs.get('nickname', '');
-      const bio: dataPreferences.ValueType = await prefs.get('bio', '');
-      AppStorage.setOrCreate<boolean>('isLoggedIn', logged as boolean);
-      AppStorage.setOrCreate<string>('userNickname', nick as string);
-      AppStorage.setOrCreate<string>('userBio', bio as string);
+      const accountKey: dataPreferences.ValueType = await prefs.get('accountKey', '');
+      const normalizedLogged: boolean = logged === true;
+      const normalizedAccountKey: string = typeof accountKey === 'string' ? accountKey : String(accountKey);
+      const nick: dataPreferences.ValueType = normalizedAccountKey.length > 0 ?
+        await prefs.get('profile.' + normalizedAccountKey + '.nickname', '') : '';
+      const bio: dataPreferences.ValueType = normalizedAccountKey.length > 0 ?
+        await prefs.get('profile.' + normalizedAccountKey + '.bio', '') : '';
+      const normalizedNick: string = typeof nick === 'string' ? nick : String(nick);
+      const normalizedBio: string = typeof bio === 'string' ? bio : String(bio);
+      AppStorage.setOrCreate<boolean>('isLoggedIn', normalizedLogged);
+      AppStorage.setOrCreate<string>('userNickname', normalizedNick);
+      AppStorage.setOrCreate<string>('userBio', normalizedBio);
+      AppStorage.setOrCreate<string>('currentAccountKey', normalizedAccountKey);
       hilog.info(DOMAIN, 'testTag', 'Restored login state: isLoggedIn=%{public}s, nick=%{public}s',
-        String(logged), String(nick));
+        String(normalizedLogged), normalizedNick);
+      return normalizedLogged && normalizedAccountKey.length > 0 && normalizedNick.trim().length > 0;
     } catch (err) {
+      AppStorage.setOrCreate<boolean>('isLoggedIn', false);
+      AppStorage.setOrCreate<string>('userNickname', '');
+      AppStorage.setOrCreate<string>('userBio', '');
+      AppStorage.setOrCreate<string>('currentAccountKey', '');
       hilog.error(DOMAIN, 'testTag', 'Failed to restore login state: %{public}s', JSON.stringify(err));
+      return false;
     }
   }
 }

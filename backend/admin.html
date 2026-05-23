@@ -115,11 +115,13 @@
       const data = await api('/api/admin/leaves?limit=100' + (status ? '&status=' + encodeURIComponent(status) : ''));
       document.getElementById('leaves').innerHTML = data.leaves.map(leaf => {
         const statusClass = leaf.status === 'deleted' ? 'deleted' : (leaf.status === 'hidden' ? 'hidden' : '');
+        const owner = leaf.account_key ? `${escapeHtml(leaf.owner_nickname || '-')} / ${escapeHtml(leaf.account_key)}` : 'legacy / unbound';
         return `<div class="leaf">
           <div class="meta">
             <span class="tag ${statusClass}">${escapeHtml(leaf.status)}</span>
             ${escapeHtml(leaf.nickname)} · ${escapeHtml(leaf.created_at)} · likes ${escapeHtml(leaf.like_count)}
           </div>
+          <div class="meta">publisher ${owner}</div>
           <div class="content">${escapeHtml(leaf.content)}</div>
           <p class="muted">${escapeHtml(leaf.moderation_reason || '')}</p>
           <div class="row">

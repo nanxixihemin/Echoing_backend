@@ -24,6 +24,7 @@ interface PrivateLeafData {
 
 const STORE_NAME: string = 'private_garden_store';
 const LEAVES_KEY: string = 'private_leaves';
+const GUEST_ACCOUNT_KEY: string = 'guest';
 
 const TAG_COLORS: Record<string, string> = {
   '学业': '#6C9BD2', '情感': '#D4849A', '生活': '#7BB88A', '压力': '#D4A06A',
@@ -58,6 +59,7 @@ struct PrivateTree {
   @State todayCount: number = 0;
   @State allTags: string[] = ['学业', '情感', '生活', '压力', '开心', '迷茫', '目标', '感恩'];
   @State viewMode: string = 'garden'; // 'garden' | 'list'
+  @StorageProp('currentAccountKey') currentAccountKey: string = '';
 
   private store: dataPreferences.Preferences | null = null;
 
@@ -71,6 +73,32 @@ struct PrivateTree {
       this.store = await dataPreferences.getPreferences(ctx, STORE_NAME);
     }
     return this.store;
+  }
+
+  private getAccountKey(): string {
+    return this.currentAccountKey.length > 0 ? this.currentAccountKey : GUEST_ACCOUNT_KEY;
+  }
+
+  private getScopedKey(baseKey: string): string {
+    return `${baseKey}.${this.getAccountKey()}`;
+  }
+
+  private async getScopedValue(store: dataPreferences.Preferences, baseKey: string, defaultValue: string): Promise<string> {
+    const scopedKey = this.getScopedKey(baseKey);
+    const scopedData: dataPreferences.ValueType = await store.get(scopedKey, '');
+    if (typeof scopedData === 'string' && scopedData.length > 0) {
+      return scopedData;
+    }
+
+    const legacyData: dataPreferences.ValueType = await store.get(baseKey, '');
+    if (typeof legacyData === 'string' && legacyData.length > 0) {
+      await store.put(scopedKey, legacyData);
+      await store.put(baseKey, '');
+      await store.flush();
+      return legacyData;
+    }
+
+    return defaultValue;
   }
 
   private getTagColor(tagName: string): string {
@@ -106,10 +134,8 @@ struct PrivateTree {
     this.isLoading = true;
     try {
       const store: dataPreferences.Preferences = await this.getStore();
-      const data: dataPreferences.ValueType = await store.get(LEAVES_KEY, '[]');
-      if (typeof data === 'string') {
-        this.leaves = JSON.parse(data) as PrivateLeafData[];
-      }
+      const data: string = await this.getScopedValue(store, LEAVES_KEY, '[]');
+      this.leaves = JSON.parse(data) as PrivateLeafData[];
       this.calculateTodayCount();
     } catch (e) {
       console.error('PrivateGarden', 'Load failed');
@@ -120,7 +146,7 @@ struct PrivateTree {
   private async saveLeaves(): Promise<void> {
     try {
       const store: dataPreferences.Preferences = await this.getStore();
-      await store.put(LEAVES_KEY, JSON.stringify(this.leaves));
+      await store.put(this.getScopedKey(LEAVES_KEY), JSON.stringify(this.leaves));
       await store.flush();
     } catch (e) {
       console.error('PrivateGarden', 'Save failed');

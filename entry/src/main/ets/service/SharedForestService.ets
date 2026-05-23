@@ -45,19 +45,24 @@ export class SharedForestService {
     }
   }
 
-  static async submitLeaf(content: string, nickname: string): Promise<http.HttpResponse> {
+  static async submitLeaf(content: string, nickname: string, accountKey: string = '', ownerNickname: string = ''): Promise<http.HttpResponse> {
     const httpRequest = http.createHttp();
     try {
       const requestBody: string = JSON.stringify({
         content: content,
-        nickname: nickname
+        nickname: nickname,
+        accountKey: accountKey,
+        ownerNickname: ownerNickname
       });
 
       return await httpRequest.request(
         `${AppConfig.SHARED_FOREST_API_BASE}/api/leaves`,
         {
           method: http.RequestMethod.POST,
-          header: { 'Content-Type': 'application/json' },
+          header: {
+            'Content-Type': 'application/json',
+            'X-Account-Key': accountKey
+          },
           extraData: requestBody,
           connectTimeout: 10000,
           readTimeout: 10000

@@ -19,13 +19,16 @@ class AIHistoryRepository:
         latency_ms: int,
         client_ip: str,
         created_at: str,
+        app_user_id: str | None = None,
+        account_key: str = "",
     ) -> None:
         self.connection.execute(
             """
             INSERT INTO ai_history(
               id, model, prompt_preview, response_preview, status,
-              error_message, latency_ms, client_ip, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+              error_message, latency_ms, client_ip, created_at,
+              app_user_id, account_key
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 history_id,
@@ -37,6 +40,8 @@ class AIHistoryRepository:
                 latency_ms,
                 client_ip,
                 created_at,
+                app_user_id,
+                account_key,
             ),
         )
 
@@ -44,7 +49,8 @@ class AIHistoryRepository:
         cursor = self.connection.execute(
             """
             SELECT id, model, prompt_preview, response_preview, status,
-                   error_message, latency_ms, client_ip, created_at
+                   error_message, latency_ms, client_ip, created_at,
+                   app_user_id, account_key
             FROM ai_history
             ORDER BY created_at DESC
             LIMIT ?

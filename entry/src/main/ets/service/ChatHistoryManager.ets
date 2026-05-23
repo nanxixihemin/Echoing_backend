@@ -10,6 +10,7 @@ import { AppConfig } from '../common/AppConfig';
 const TAG: string = 'ChatHistoryManager';
 const DOMAIN: number = 0xFF01;
 const PREF_NAME: string = 'chat_history_store';
+const ACCOUNT_PREF_NAME: string = 'echoing_user';
 const SESSION_INDEX_KEY: string = 'session_index';
 const USER_ID_KEY: string = 'device_user_id';
 const CLOUD_BASE: string = AppConfig.CHAT_HISTORY_CLOUD_BASE;
@@ -23,6 +24,10 @@ export interface ChatMsg {
 
 export interface ChatSession {
   id: string;
+  userId?: string;
+  accountKey?: string;
+  nickname?: string;
+  bio?: string;
   theme: string;
   summary: string;
   systemPrompt: string;
@@ -52,6 +57,9 @@ export class ChatHistoryManager {
   private preferences: dataPreferences.Preferences | null = null;
   private isInitialized: boolean = false;
   private userId: string = 'default';
+  private accountKey: string = '';
+  private nickname: string = '';
+  private bio: string = '';
 
   private constructor() {
   }
@@ -64,27 +72,66 @@ export class ChatHistoryManager {
   }
 
   public async initialize(context: common.UIAbilityContext): Promise<void> {
-    if (this.isInitialized) {
-      return;
-    }
     try {
-      this.preferences = await dataPreferences.getPreferences(context, PREF_NAME);
-      this.isInitialized = true;
-      // 生成或读取用户ID
-      const storedId = await this.preferences.get(USER_ID_KEY, '') as string;
-      if (storedId) {
-        this.userId = storedId;
-      } else {
-        this.userId = `u_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
-        await this.preferences.put(USER_ID_KEY, this.userId);
-        await this.preferences.flush();
+      if (this.preferences === null) {
+        this.preferences = await dataPreferences.getPreferences(context, PREF_NAME);
       }
-      hilog.info(DOMAIN, TAG, `ChatHistory initialized, userId: ${this.userId}`);
+      await this.refreshAccountIdentity(context);
+      this.isInitialized = true;
+      hilog.info(DOMAIN, TAG, `ChatHistory initialized, userId: ${this.userId}, accountKey: ${this.accountKey}`);
     } catch (err) {
       const error = err as Error;
       hilog.error(DOMAIN, TAG, `Init failed: ${error.message}`);
       return Promise.reject(error);
     }
+  }
+
+  public getUserId(): string {
+    return this.userId;
+  }
+
+  public getAccountKey(): string {
+    return this.accountKey;
+  }
+
+  private async refreshAccountIdentity(context: common.UIAbilityContext): Promise<void> {
+    const accountPrefs = await dataPreferences.getPreferences(context, ACCOUNT_PREF_NAME);
+    const storedAccountKey = await accountPrefs.get('accountKey', '') as string;
+    if (storedAccountKey.length > 0) {
+      this.accountKey = storedAccountKey;
+      this.userId = storedAccountKey;
+      const nick = await accountPrefs.get(`profile.${storedAccountKey}.nickname`, '') as string;
+      const bio = await accountPrefs.get(`profile.${storedAccountKey}.bio`, '') as string;
+      const legacyNick = await accountPrefs.get('nickname', '') as string;
+      const legacyBio = await accountPrefs.get('bio', '') as string;
+      this.nickname = nick.length > 0 ? nick : legacyNick;
+      this.bio = bio.length > 0 ? bio : legacyBio;
+      return;
+    }
+    this.accountKey = '';
+    this.nickname = '';
+    this.bio = '';
+    await this.ensureDeviceUserId();
+  }
+
+  private async ensureDeviceUserId(): Promise<void> {
+    if (this.preferences === null) return;
+    const storedId = await this.preferences.get(USER_ID_KEY, '') as string;
+    if (storedId) {
+      this.userId = storedId;
+      return;
+    }
+    this.userId = `u_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+    await this.preferences.put(USER_ID_KEY, this.userId);
+    await this.preferences.flush();
+  }
+
+  private getSessionIndexKey(): string {
+    return `${SESSION_INDEX_KEY}_${this.userId}`;
+  }
+
+  private getSessionStorageKey(sessionId: string): string {
+    return `chat_${this.userId}_${sessionId}`;
   }
 
   // ==================== 本地存储 ====================
@@ -95,7 +142,11 @@ export class ChatHistoryManager {
     }
     try {
       session.updatedAt = Date.now();
-      const key = `chat_${session.id}`;
+      session.userId = this.userId;
+      session.accountKey = this.accountKey || this.userId;
+      session.nickname = this.nickname;
+      session.bio = this.bio;
+      const key = this.getSessionStorageKey(session.id);
       await this.preferences.put(key, JSON.stringify(session));
       await this.addToIndex(session.id);
       await this.preferences.flush();
@@ -114,7 +165,7 @@ export class ChatHistoryManager {
       return null;
     }
     try {
-      const key = `chat_${sessionId}`;
+      const key = this.getSessionStorageKey(sessionId);
       const json = await this.preferences.get(key, '') as string;
       if (!json) return null;
       return JSON.parse(json) as ChatSession;
@@ -130,7 +181,7 @@ export class ChatHistoryManager {
       return [];
     }
     try {
-      const indexJson = await this.preferences.get(SESSION_INDEX_KEY, '[]') as string;
+      const indexJson = await this.preferences.get(this.getSessionIndexKey(), '[]') as string;
       const ids: string[] = JSON.parse(indexJson) as string[];
       let sessions: ChatSession[] = [];
 
@@ -156,7 +207,7 @@ export class ChatHistoryManager {
       return;
     }
     try {
-      const key = `chat_${sessionId}`;
+      const key = this.getSessionStorageKey(sessionId);
       await this.preferences.delete(key);
       await this.removeFromIndex(sessionId);
       await this.preferences.flush();
@@ -172,11 +223,11 @@ export class ChatHistoryManager {
   private async addToIndex(sessionId: string): Promise<void> {
     if (this.preferences === null) return;
     try {
-      const indexJson = await this.preferences.get(SESSION_INDEX_KEY, '[]') as string;
+      const indexJson = await this.preferences.get(this.getSessionIndexKey(), '[]') as string;
       let ids: string[] = JSON.parse(indexJson) as string[];
       if (!ids.includes(sessionId)) {
         ids.push(sessionId);
-        await this.preferences.put(SESSION_INDEX_KEY, JSON.stringify(ids));
+        await this.preferences.put(this.getSessionIndexKey(), JSON.stringify(ids));
       }
     } catch (err) {
       hilog.error(DOMAIN, TAG, `Add to index failed`);
@@ -186,7 +237,7 @@ export class ChatHistoryManager {
   private async removeFromIndex(sessionId: string): Promise<void> {
     if (this.preferences === null) return;
     try {
-      const indexJson = await this.preferences.get(SESSION_INDEX_KEY, '[]') as string;
+      const indexJson = await this.preferences.get(this.getSessionIndexKey(), '[]') as string;
       let ids: string[] = JSON.parse(indexJson) as string[];
       let newIds: string[] = [];
       for (let i = 0; i < ids.length; i++) {
@@ -194,7 +245,7 @@ export class ChatHistoryManager {
           newIds.push(ids[i]);
         }
       }
-      await this.preferences.put(SESSION_INDEX_KEY, JSON.stringify(newIds));
+      await this.preferences.put(this.getSessionIndexKey(), JSON.stringify(newIds));
     } catch (err) {
       hilog.error(DOMAIN, TAG, `Remove from index failed`);
     }
@@ -209,7 +260,11 @@ export class ChatHistoryManager {
         `${CLOUD_BASE}/api/sessions`,
         {
           method: http.RequestMethod.POST,
-          header: { 'Content-Type': 'application/json', 'X-User-Id': this.userId },
+          header: {
+            'Content-Type': 'application/json',
+            'X-User-Id': this.userId,
+            'X-Account-Key': this.accountKey || this.userId
+          },
           extraData: JSON.stringify(session),
           connectTimeout: 5000,
           readTimeout: 10000
@@ -232,7 +287,7 @@ export class ChatHistoryManager {
     try {
       const httpReq = http.createHttp();
       httpReq.request(
-        `${CLOUD_BASE}/api/sessions/${sessionId}?userId=${this.userId}`,
+        `${CLOUD_BASE}/api/sessions/${sessionId}?userId=${encodeURIComponent(this.userId)}&accountKey=${encodeURIComponent(this.accountKey || this.userId)}`,
         {
           method: http.RequestMethod.DELETE,
           connectTimeout: 5000,
@@ -253,9 +308,13 @@ export class ChatHistoryManager {
     try {
       const httpReq = http.createHttp();
       httpReq.request(
-        `${CLOUD_BASE}/api/memory-context?userId=${this.userId}`,
+        `${CLOUD_BASE}/api/memory-context?userId=${encodeURIComponent(this.userId)}&accountKey=${encodeURIComponent(this.accountKey || this.userId)}`,
         {
           method: http.RequestMethod.GET,
+          header: {
+            'X-User-Id': this.userId,
+            'X-Account-Key': this.accountKey || this.userId
+          },
           connectTimeout: 3000,
           readTimeout: 5000
         },

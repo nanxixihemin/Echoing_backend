@@ -20,6 +20,8 @@ struct SharedWrite {
   @State showCrisisDialog: boolean = false;
   @State crisisLevel: string = 'none';
   @State showMildWarning: boolean = false;
+  @StorageProp('currentAccountKey') currentAccountKey: string = '';
+  @StorageProp('userNickname') userNickname: string = '';
 
   aboutToAppear(): void {
     this.checkConnection();
@@ -73,7 +75,12 @@ struct SharedWrite {
       : this.generateNickname();
 
     try {
-      const response = await SharedForestService.submitLeaf(this.inputContent.trim(), nickname);
+      const response = await SharedForestService.submitLeaf(
+        this.inputContent.trim(),
+        nickname,
+        this.currentAccountKey,
+        this.userNickname
+      );
 
       if (response.responseCode === 200) {
         const aiRes: string = AIResponseGenerator.generate(this.inputContent);

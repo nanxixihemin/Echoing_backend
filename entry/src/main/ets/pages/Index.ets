@@ -17,7 +17,7 @@ struct Index {
   @State pendingTasks: EchoTask[] = [];
   @State showDrawer: boolean = false;
   @State activeTool: string = 'none'; // 'none', 'spinner', 'tarot', etc.
-  // 全局登录状态（只读订阅，由 LoginPage 写入）
+  // 登录状态监听(只读绑定，由 LoginPage 更新)
   @StorageProp('isLoggedIn') isLoggedIn: boolean = false;
   @StorageProp('userNickname') userNickname: string = '';
   private dbService: DatabaseService | null = null;
@@ -38,7 +38,7 @@ struct Index {
     let seed: Seed = {
       content: content,
       source: 'TREE_HOLE',
-      state: 1, 
+      state: 1,
       created_at: new Date().getTime()
     };
     if (!this.dbService) return;
@@ -46,24 +46,24 @@ struct Index {
 
     let task: EchoTask = {
       seed_id: seedId,
-      action: '处理杂念: ' + content,
+      action: '树洞回声: ' + content,
       is_completed: false,
       created_at: new Date().getTime()
     };
     await this.dbService.insertTask(task);
-    
+
     await this.loadTasks();
     this.showDrawer = true;
   }
 
   async handleSpinnerResult(result: string) {
     this.activeTool = 'none';
-    
-    // 轮盘没有原始文字输入，直接生成一条特殊来源的待办
+
+    // 把转盘结果存为一个种子，并自动创建一条回声任务
     let seed: Seed = {
-      content: '求助于指尖轮盘',
+      content: '转盘抽取结果',
       source: 'SPINNER',
-      state: 1, 
+      state: 1,
       created_at: new Date().getTime()
     };
     if (!this.dbService) return;
@@ -71,12 +71,12 @@ struct Index {
 
     let task: EchoTask = {
       seed_id: seedId,
-      action: result, // 结果比如 "点外卖"
+      action: result, // 例如 "去散步"
       is_completed: false,
       created_at: new Date().getTime()
     };
     await this.dbService.insertTask(task);
-    
+
     await this.loadTasks();
     this.showDrawer = true;
   }
@@ -84,9 +84,9 @@ struct Index {
   async handleSoulResult(result: string) {
     this.activeTool = 'none';
     let seed: Seed = {
-      content: '灵魂天平的权衡抉择',
+      content: '灵魂选择结果',
       source: 'CHOICE',
-      state: 1, 
+      state: 1,
       created_at: new Date().getTime()
     };
     if (!this.dbService) return;
@@ -94,12 +94,12 @@ struct Index {
 
     let task: EchoTask = {
       seed_id: seedId,
-      action: '执行抉择: ' + result,
+      action: '灵魂选择: ' + result,
       is_completed: false,
       created_at: new Date().getTime()
     };
     await this.dbService.insertTask(task);
-    
+
     await this.loadTasks();
     this.showDrawer = true;
   }
@@ -107,9 +107,9 @@ struct Index {
   async handleTarotResult(result: string) {
     this.activeTool = 'none';
     let seed: Seed = {
-      content: '嵩月塔罗的神秘启示',
+      content: '塔罗占卜结果',
       source: 'TAROT',
-      state: 1, 
+      state: 1,
       created_at: new Date().getTime()
     };
     if (!this.dbService) return;
@@ -122,7 +122,7 @@ struct Index {
       created_at: new Date().getTime()
     };
     await this.dbService.insertTask(task);
-    
+
     await this.loadTasks();
     this.showDrawer = true;
   }
@@ -130,9 +130,9 @@ struct Index {
   async handleIntroResult(result: string) {
     this.activeTool = 'none';
     let seed: Seed = {
-      content: '问心对谈的自我剖析',
+      content: '内省探索结果',
       source: 'INTROSPECTION',
-      state: 1, 
+      state: 1,
       created_at: new Date().getTime()
     };
     if (!this.dbService) return;
@@ -140,12 +140,12 @@ struct Index {
 
     let task: EchoTask = {
       seed_id: seedId,
-      action: '微光行动: ' + result,
+      action: '内省感悟: ' + result,
       is_completed: false,
       created_at: new Date().getTime()
     };
     await this.dbService.insertTask(task);
-    
+
     await this.loadTasks();
     this.showDrawer = true;
   }
@@ -162,51 +162,47 @@ struct Index {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      
+
       if (this.activeTool === 'none') {
-        // 主体背景
         Column() {
-          // 留出给顶部 Header 避让的空间
           Blank().height(100)
 
-          // 环绕的星轨组件
           Row({ space: 16 }) {
-            this.MagicButton('问心', '#FF6B6B', (): void => {
+            this.MagicButton('\u5185\u7701', '#FF6B6B', (): void => {
               this.activeTool = 'intro';
             })
-            this.MagicButton('抉择', '#FFD93D', (): void => {
+            this.MagicButton('\u7075\u9b42', '#FFD93D', (): void => {
               this.activeTool = 'soul';
             })
-            this.MagicButton('灵选', '#B89CD4', (): void => {
+            this.MagicButton('\u8da3\u9009', '#B89CD4', (): void => {
               router.pushUrl({ url: 'pages/FunChoiceView' });
             })
-            this.MagicButton('塔罗', '#6BCB77', (): void => {
+            this.MagicButton('\u5854\u7f57', '#6BCB77', (): void => {
               router.pushUrl({ url: 'pages/TarotView' });
             })
-            this.MagicButton('轮盘', '#4D96FF', (): void => {
+            this.MagicButton('\u8f6c\u76d8', '#4D96FF', (): void => {
               this.activeTool = 'spinner';
             })
           }
           .margin({ bottom: 40 })
 
-          // 中心树洞区域（入口卡片）
           Column() {
             Row() {
               Column() {
-                Text('树隐回声')
+                Text('\u6b63\u5ff5\u6811')
                   .fontSize(22)
                   .fontWeight(FontWeight.Bold)
                   .fontColor(ColorConstants.TEXT_PRIMARY)
                   .margin({ bottom: 4 })
-                Text('前往你的专属树洞与私密花园')
+                Text('\u6bcf\u65e5\u6b63\u5ff5\u7ec3\u4e60\uff0c\u6ecb\u517b\u5185\u5fc3')
                   .fontSize(12)
                   .fontColor(ColorConstants.MINT_CYAN)
               }.alignItems(HorizontalAlign.Start)
-              
+
               Blank()
-              
-              Text('→')
-                .fontSize(24)
+
+              Text('->')
+                .fontSize(20)
                 .fontColor(ColorConstants.MINT_CYAN)
             }
             .width('100%')
@@ -229,62 +225,42 @@ struct Index {
           if (this.showDrawer) this.showDrawer = false;
         })
 
-        // 全局顶部 Header 区
         Row() {
-          Image($r('app.media.echoing_icon'))
-            .width(44)
-            .height(44)
-            .borderRadius(22)
-            .border({ width: 2, color: ColorConstants.MINT_CYAN })
-            .shadow({ radius: 10, color: 'rgba(0, 240, 255, 0.2)' })
-          
-          Column() {
-            Text('Echoing')
-              .fontColor(ColorConstants.TEXT_PRIMARY)
-              .fontSize(18)
-              .fontWeight(FontWeight.Bold)
-              .letterSpacing(2)
-            Text('在微光中倾听回声')
-              .fontColor(ColorConstants.TEXT_SECONDARY)
-              .fontSize(11)
-          }
-          .alignItems(HorizontalAlign.Start)
-          .margin({ left: 12 })
-          
-          Blank()
+          Row({ space: 10 }) {
+            Image($r('app.media.echoing_icon'))
+              .width(40)
+              .height(40)
+              .borderRadius(20)
+              .border({ width: 2, color: ColorConstants.MINT_CYAN })
+              .shadow({ radius: 10, color: 'rgba(0, 240, 255, 0.2)' })
 
-          if (this.isLoggedIn && this.userNickname.length > 0) {
-            // 已登录：显示昵称首字母头像
-            Text(this.userNickname.charAt(0).toUpperCase())
-              .fontSize(14)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#FFFFFF')
-              .width(32)
-              .height(32)
-              .textAlign(TextAlign.Center)
-              .borderRadius(16)
-              .backgroundColor(ColorConstants.MINT_CYAN)
-              .border({ width: 1.5, color: 'rgba(0, 240, 255, 0.4)' })
-              .onClick(() => {
-                router.pushUrl({ url: 'pages/LoginPage' });
-              })
-          } else {
-            // 未登录：显示默认图标
-            Text('👤').fontSize(20)
-              .onClick(() => {
-                router.pushUrl({ url: 'pages/LoginPage' });
-              })
+            Column() {
+              Text('Echoing')
+                .fontColor(ColorConstants.TEXT_PRIMARY)
+                .fontSize(18)
+                .fontWeight(FontWeight.Bold)
+                .letterSpacing(2)
+              Text(this.isLoggedIn && this.userNickname.length > 0 ? this.userNickname + ' \u00B7 \u8046\u542c\u5185\u5fc3\u7684\u56de\u54cd' : '\u8046\u542c\u5185\u5fc3\u7684\u56de\u54cd')
+                .fontColor(ColorConstants.TEXT_SECONDARY)
+                .fontSize(11)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
+            .alignItems(HorizontalAlign.Start)
           }
-          
-          Text('⚙️').fontSize(20)
-            .margin({ left: 16 })
+          .padding({ left: 8, right: 12, top: 6, bottom: 6 })
+          .borderRadius(22)
+          .backgroundColor('rgba(22, 27, 34, 0.42)')
+          .border({ width: 1, color: ColorConstants.MINT_CYAN_DIM })
+          .onClick(() => {
+            router.pushUrl({ url: 'pages/LoginPage' });
+          })
         }
         .width('100%')
-        .padding({ left: 24, right: 24, top: 40 })
+        .padding({ left: 16, right: 16, top: 40 })
         .position({ x: 0, y: 0 })
         .zIndex(10)
       }
-
       // 底部抽屉
       Column() {
         if (!this.showDrawer) {
@@ -298,7 +274,7 @@ struct Index {
               this.showDrawer = true;
             })
         } else {
-          EchoDrawer({ 
+          EchoDrawer({
             tasks: $pendingTasks,
             onCompleteTask: (task: EchoTask): void => { this.handleComplete(task); }
           })
@@ -310,7 +286,7 @@ struct Index {
       .width('100%')
       .animation({ duration: 400, curve: Curve.FastOutSlowIn })
 
-      // 全屏工具渲染层
+      // 功能组件覆盖层
       if (this.activeTool === 'spinner') {
         SpinnerWidget({
           onResult: (result: string): void => { this.handleSpinnerResult(result); },

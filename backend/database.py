@@ -155,7 +155,76 @@ def _migration_002_auth_admin_ai_history(connection: sqlite3.Connection) -> None
     )
 
 
+def _migration_003_app_users_chat_sessions(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS app_users (
+          id TEXT PRIMARY KEY,
+          account_key TEXT NOT NULL UNIQUE,
+          provider TEXT NOT NULL DEFAULT '',
+          external_id TEXT NOT NULL DEFAULT '',
+          nickname TEXT NOT NULL DEFAULT '',
+          bio TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          last_seen_at TEXT
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_app_users_account_key
+        ON app_users(account_key)
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+          id TEXT PRIMARY KEY,
+          app_user_id TEXT NOT NULL,
+          account_key TEXT NOT NULL,
+          theme TEXT NOT NULL DEFAULT '',
+          summary TEXT NOT NULL DEFAULT '',
+          system_prompt TEXT NOT NULL DEFAULT '',
+          messages_json TEXT NOT NULL DEFAULT '[]',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          synced_at TEXT NOT NULL,
+          FOREIGN KEY(app_user_id) REFERENCES app_users(id)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_updated_at
+        ON chat_sessions(app_user_id, updated_at DESC)
+        """
+    )
+    _add_column_if_missing(connection, "ai_history", "app_user_id", "TEXT")
+    _add_column_if_missing(connection, "ai_history", "account_key", "TEXT NOT NULL DEFAULT ''")
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_ai_history_app_user_created_at
+        ON ai_history(app_user_id, created_at DESC)
+        """
+    )
+
+
+def _migration_004_shared_forest_app_owner(connection: sqlite3.Connection) -> None:
+    _add_column_if_missing(connection, "shared_leaves", "app_user_id", "TEXT")
+    _add_column_if_missing(connection, "shared_leaves", "account_key", "TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(connection, "shared_leaves", "owner_nickname", "TEXT NOT NULL DEFAULT ''")
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_shared_leaves_account_created_at
+        ON shared_leaves(account_key, created_at DESC)
+        """
+    )
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "shared_forest_base", _migration_001_shared_forest),
     (2, "auth_admin_ai_history", _migration_002_auth_admin_ai_history),
+    (3, "app_users_chat_sessions", _migration_003_app_users_chat_sessions),
+    (4, "shared_forest_app_owner", _migration_004_shared_forest_app_owner),
 ]

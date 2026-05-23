@@ -122,7 +122,7 @@ struct Index {
   build() {
     Stack() {
       // 背景图片 - 根据当前模式切换
-      Image(this.currentMode === 'private' ? $r('app.media.private_garden_bg') : $r('app.media.forest_bg'))
+      Image(this.currentMode === 'private' ? $r('app.media.private_garden_bg') : $rawfile('garden_bg.jpg'))
         .width('100%')
         .height('100%')
         .objectFit(ImageFit.Cover)

@@ -23,6 +23,8 @@ interface HistoryRecord {
   category?: string;
 }
 
+const GUEST_ACCOUNT_KEY: string = 'guest';
+
 @Entry
 @Component
 struct FunChoiceView {
@@ -40,6 +42,7 @@ struct FunChoiceView {
   @State historyRecords: HistoryRecord[] = [];
   @State isAnimating: boolean = false;
   @State questions: Question[] = [];
+  @StorageProp('currentAccountKey') currentAccountKey: string = '';
 
   private categories: string[] = ['全部', '学业篇', '生活篇', '社交篇', '情感篇', '成长篇', '娱乐篇', '自定义'];
 
@@ -83,23 +86,56 @@ struct FunChoiceView {
     this.loadData();
   }
 
+  private getAccountKey(): string {
+    return this.currentAccountKey.length > 0 ? this.currentAccountKey : GUEST_ACCOUNT_KEY;
+  }
+
+  private getScopedKey(baseKey: string): string {
+    return `${baseKey}.${this.getAccountKey()}`;
+  }
+
+  private cloneDefaultQuestions(): Question[] {
+    return JSON.parse(JSON.stringify(this.defaultQuestions)) as Question[];
+  }
+
+  private async getScopedValue(store: preferences.Preferences, baseKey: string, defaultValue: string): Promise<string> {
+    const scopedKey = this.getScopedKey(baseKey);
+    const scopedData = await store.get(scopedKey, '') as string;
+    if (scopedData && scopedData.length > 0) {
+      return scopedData;
+    }
+
+    const legacyData = await store.get(baseKey, '') as string;
+    if (legacyData && legacyData.length > 0) {
+      await store.put(scopedKey, legacyData);
+      await store.put(baseKey, '');
+      await store.flush();
+      return legacyData;
+    }
+
+    return defaultValue;
+  }
+
   private async loadData(): Promise<void> {
     try {
       const context = getContext(this) as common.UIAbilityContext;
       this.context = context;
       const store = await preferences.getPreferences(context, this.preferencesName);
-      const questionsStr = await store.get('questions', '') as string;
+      const questionsStr = await this.getScopedValue(store, 'questions', '');
       if (questionsStr && questionsStr.length > 0) {
         this.questions = JSON.parse(questionsStr) as Question[];
       } else {
-        this.questions = this.defaultQuestions;
+        this.questions = this.cloneDefaultQuestions();
       }
-      const historyStr = await store.get('history', '') as string;
+      const historyStr = await this.getScopedValue(store, 'history', '');
       if (historyStr && historyStr.length > 0) {
         this.historyRecords = JSON.parse(historyStr) as HistoryRecord[];
+      } else {
+        this.historyRecords = [];
       }
     } catch (error) {
-      this.questions = this.defaultQuestions;
+      this.questions = this.cloneDefaultQuestions();
+      this.historyRecords = [];
     }
   }
 
@@ -107,8 +143,8 @@ struct FunChoiceView {
     try {
       if (this.context === null) { return; }
       const store = await preferences.getPreferences(this.context, this.preferencesName);
-      await store.put('questions', JSON.stringify(this.questions));
-      await store.put('history', JSON.stringify(this.historyRecords));
+      await store.put(this.getScopedKey('questions'), JSON.stringify(this.questions));
+      await store.put(this.getScopedKey('history'), JSON.stringify(this.historyRecords));
       await store.flush();
     } catch (error) {
       // ignore
@@ -147,7 +183,7 @@ struct FunChoiceView {
       title: '重置确认', message: '确定要重置所有问题为默认设置吗？自定义问题将被删除。',
       primaryButton: { value: '取消', action: () => {} },
       secondaryButton: { value: '重置', fontColor: '#FF3B30', action: () => {
-        this.questions = [...this.defaultQuestions];
+        this.questions = this.cloneDefaultQuestions();
         this.saveData();
         this.getUIContext().getPromptAction().showToast({ message: '已重置' });
       }}
