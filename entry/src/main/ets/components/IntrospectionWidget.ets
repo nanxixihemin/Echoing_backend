@@ -52,35 +52,33 @@ export struct IntrospectionWidget {
 
         // 问答流 (对话轴)
         List({ space: 24 }) {
-           ForEach(this.questions, (q: string, idx: number) => {
-              if (idx <= this.currentStep) {
-                 ListItem() {
-                    Column() {
-                        // 系统提问
-                        Text(`Q${idx + 1}: ` + q)
-                           .fontSize(14)
-                           .lineHeight(20)
-                           .fontColor(ColorConstants.TEXT_SECONDARY)
-                           .margin({ bottom: 12 })
-                           .transition({ type: TransitionType.Insert, opacity: 1, translate: { y: 20 } })
+           ForEach(this.questions.slice(0, this.currentStep + 1), (q: string, idx: number) => {
+              ListItem() {
+                 Column() {
+                     // 系统提问
+                     Text(`Q${idx + 1}: ` + q)
+                        .fontSize(14)
+                        .lineHeight(20)
+                        .fontColor(ColorConstants.TEXT_SECONDARY)
+                        .margin({ bottom: 12 })
+                        .transition({ type: TransitionType.Insert, opacity: 1, translate: { y: 20 } })
 
-                        // 用户回答
-                        if (idx < this.currentStep) {
-                           Text(this.answers[idx])
-                             .fontSize(15)
-                             .lineHeight(22)
-                             .fontColor(ColorConstants.MINT_CYAN)
-                             .padding(16)
-                             .backgroundColor(ColorConstants.SURFACE_GLASS)
-                             .borderRadius(16)
-                             .margin({ bottom: 8 })
-                             .transition({ type: TransitionType.Insert, opacity: 1 })
-                        }
-                    }
-                    .alignItems(HorizontalAlign.Start)
-                    .width('100%')
-                    .padding({ left: 24, right: 24 })
+                     // 用户回答
+                     if (idx < this.currentStep) {
+                        Text(this.answers[idx])
+                          .fontSize(15)
+                          .lineHeight(22)
+                          .fontColor(ColorConstants.MINT_CYAN)
+                          .padding(16)
+                          .backgroundColor(ColorConstants.SURFACE_GLASS)
+                          .borderRadius(16)
+                          .margin({ bottom: 8 })
+                          .transition({ type: TransitionType.Insert, opacity: 1 })
+                     }
                  }
+                 .alignItems(HorizontalAlign.Start)
+                 .width('100%')
+                 .padding({ left: 24, right: 24 })
               }
            })
         }
