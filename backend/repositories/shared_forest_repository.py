@@ -24,7 +24,8 @@ class SharedForestRepository:
         cursor = self.connection.execute(
             f"""
             SELECT id, content, nickname, ai_response, like_count, created_at, updated_at,
-                   status, moderation_flag, moderation_reason, deleted_at, deleted_by
+                   status, moderation_flag, moderation_reason, deleted_at, deleted_by,
+                   app_user_id, account_key, owner_nickname
             FROM shared_leaves
             {status_filter}
             ORDER BY created_at DESC
@@ -39,7 +40,8 @@ class SharedForestRepository:
             cursor = self.connection.execute(
                 """
                 SELECT id, content, nickname, ai_response, like_count, created_at, updated_at,
-                       status, moderation_flag, moderation_reason, deleted_at, deleted_by
+                       status, moderation_flag, moderation_reason, deleted_at, deleted_by,
+                       app_user_id, account_key, owner_nickname
                 FROM shared_leaves
                 WHERE status = ?
                 ORDER BY created_at DESC
@@ -51,7 +53,8 @@ class SharedForestRepository:
             cursor = self.connection.execute(
                 """
                 SELECT id, content, nickname, ai_response, like_count, created_at, updated_at,
-                       status, moderation_flag, moderation_reason, deleted_at, deleted_by
+                       status, moderation_flag, moderation_reason, deleted_at, deleted_by,
+                       app_user_id, account_key, owner_nickname
                 FROM shared_leaves
                 ORDER BY created_at DESC
                 LIMIT ?
@@ -109,13 +112,16 @@ class SharedForestRepository:
         moderation_flag: str,
         moderation_reason: str,
         created_at: str,
+        app_user_id: str | None,
+        account_key: str,
+        owner_nickname: str,
     ) -> dict[str, Any]:
         self.connection.execute(
             """
             INSERT INTO shared_leaves (
               id, content, nickname, ai_response, like_count, created_at, updated_at,
-              status, moderation_flag, moderation_reason
-            ) VALUES (?, ?, ?, ?, 0, ?, ?, 'visible', ?, ?)
+              status, moderation_flag, moderation_reason, app_user_id, account_key, owner_nickname
+            ) VALUES (?, ?, ?, ?, 0, ?, ?, 'visible', ?, ?, ?, ?, ?)
             """,
             (
                 leaf_id,
@@ -126,12 +132,16 @@ class SharedForestRepository:
                 created_at,
                 moderation_flag,
                 moderation_reason,
+                app_user_id,
+                account_key,
+                owner_nickname,
             ),
         )
         row = self.connection.execute(
             """
             SELECT id, content, nickname, ai_response, like_count, created_at, updated_at,
-                   status, moderation_flag, moderation_reason, deleted_at, deleted_by
+                   status, moderation_flag, moderation_reason, deleted_at, deleted_by,
+                   app_user_id, account_key, owner_nickname
             FROM shared_leaves
             WHERE id = ?
             """,

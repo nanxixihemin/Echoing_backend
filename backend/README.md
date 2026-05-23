@@ -10,6 +10,8 @@ It provides:
 - Admin panel
 - Leaf moderation and deletion
 - AI request history
+- App user profile upsert
+- Account-scoped chat sessions and memory context
 - SQLite schema migrations
 
 ## Configure
@@ -63,7 +65,7 @@ Invoke-WebRequest -Uri http://127.0.0.1:8111/api/leaves
 Create a leaf:
 
 ```powershell
-Invoke-WebRequest -Uri http://127.0.0.1:8111/api/leaves -Method POST -ContentType 'application/json' -Body '{"content":"hello","nickname":"anonymous"}'
+Invoke-WebRequest -Uri http://127.0.0.1:8111/api/leaves -Method POST -ContentType 'application/json' -Headers @{"X-Account-Key"="email:test@example.com"} -Body '{"content":"hello","nickname":"anonymous","accountKey":"email:test@example.com","ownerNickname":"Xixi"}'
 ```
 
 Like a leaf:
@@ -79,6 +81,53 @@ POST /v1/chat/completions
 ```
 
 The backend always uses `MODELSCOPE_MODEL` from `.env`; the app cannot override the model.
+
+App user upsert:
+
+```text
+POST /api/app-users/upsert
+```
+
+Chat session list/save:
+
+```text
+GET  /api/sessions?accountKey=<account_key>&limit=50
+POST /api/sessions
+```
+
+Memory context:
+
+```text
+GET /api/memory-context?accountKey=<account_key>&limit=6
+```
+
+## Tarot AI Loop
+
+`pages/TarotView` and `pages/AIDialogPage` call the backend AI proxy through
+`AppConfig.AI_CHAT_COMPLETIONS_PROXY_URL`.
+
+For local verification:
+
+```powershell
+cd D:\do_it\first_fruit\echoing\backend
+python server.py
+```
+
+Then check:
+
+```text
+http://127.0.0.1:8111/health
+```
+
+When running on a real HarmonyOS device, do not set the app proxy URL to
+`127.0.0.1`; use the computer LAN IP and keep the `/v1/chat/completions` path,
+for example `http://192.168.1.10:8111/v1/chat/completions`.
+
+Minimal app path to verify:
+
+```text
+Index -> TarotView -> AI interpretation -> AIDialogPage -> ask follow-up -> ChatHistoryPage
+```
 
 ## Admin APIs
 
@@ -120,11 +169,22 @@ Tables:
 
 - `schema_migrations`
 - `shared_leaves`
+- `app_users`
+- `chat_sessions`
 - `admin_users`
 - `auth_sessions`
 - `ai_history`
 
 Shared leaves are kept visible for 7 days. Expired leaves are soft-deleted when the list endpoint is called.
+
+App user accounts are separate from backend admin accounts. `admin_users` and
+`auth_sessions` are only for the admin panel. App user identity is stored in
+`app_users`, while AI and tarot memory are stored in `chat_sessions` and linked
+by `account_key`.
+
+Shared forest records can include `account_key` and `owner_nickname` so the
+admin panel can see who published a leaf. Older shared leaves remain valid with
+empty owner fields.
 
 API keys are never stored in SQLite.
 

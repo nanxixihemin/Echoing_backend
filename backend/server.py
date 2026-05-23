@@ -37,13 +37,17 @@ PORT = int(os.environ.get("PORT", "8111"))
 
 from database import DB_PATH, init_database
 from services.ai_history_service import AIHistoryService
+from services.app_user_service import AppUserError, AppUserService
 from services.auth_service import AuthError, AuthService
+from services.chat_session_service import ChatSessionError, ChatSessionService
 from services.shared_forest_service import NotFoundError, SharedForestService, ValidationError
 
 
 shared_forest_service = SharedForestService()
 auth_service = AuthService()
 ai_history_service = AIHistoryService()
+app_user_service = AppUserService()
+chat_session_service = ChatSessionService()
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
@@ -72,6 +76,24 @@ class ProxyHandler(BaseHTTPRequestHandler):
             query = parse_qs(route.query)
             limit = self.parse_int(query.get("limit", ["100"])[0], 100)
             self.send_json(200, shared_forest_service.list_leaves(limit))
+            return
+        if route.path == "/api/sessions":
+            query = parse_qs(route.query)
+            account_key = self.resolve_account_key(query=query)
+            if not account_key:
+                self.send_json(400, {"error": "accountKey is required"})
+                return
+            limit = self.parse_int(query.get("limit", ["100"])[0], 100)
+            self.send_json(200, chat_session_service.list_sessions(account_key, limit))
+            return
+        if route.path == "/api/memory-context":
+            query = parse_qs(route.query)
+            account_key = self.resolve_account_key(query=query)
+            if not account_key:
+                self.send_json(200, {"context": "", "count": 0})
+                return
+            limit = self.parse_int(query.get("limit", ["5"])[0], 5)
+            self.send_json(200, chat_session_service.memory_context(account_key, limit))
             return
         if route.path == "/api/auth/me":
             try:
@@ -123,13 +145,37 @@ class ProxyHandler(BaseHTTPRequestHandler):
         if route.path == "/api/leaves":
             try:
                 payload = self.read_json_body()
+                account_key = self.resolve_account_key(payload=payload)
+                if account_key:
+                    payload["accountKey"] = account_key
                 self.send_json(200, shared_forest_service.create_leaf(payload))
-            except ValidationError as exc:
+            except (ValidationError, AppUserError) as exc:
                 self.send_json(400, {"error": str(exc)})
             except json.JSONDecodeError:
                 self.send_json(400, {"error": "Request body must be valid JSON"})
             except Exception as exc:
                 self.send_json(500, {"error": str(exc)})
+            return
+
+        if route.path == "/api/app-users/upsert":
+            try:
+                payload = self.read_json_body()
+                self.send_json(200, {"user": app_user_service.upsert(payload)})
+            except AppUserError as exc:
+                self.send_json(400, {"error": str(exc)})
+            except json.JSONDecodeError:
+                self.send_json(400, {"error": "Request body must be valid JSON"})
+            return
+
+        if route.path == "/api/sessions":
+            try:
+                payload = self.read_json_body()
+                account_key = self.resolve_account_key(payload=payload)
+                self.send_json(200, chat_session_service.save_session(payload, account_key))
+            except (ChatSessionError, AppUserError) as exc:
+                self.send_json(400, {"error": str(exc)})
+            except json.JSONDecodeError:
+                self.send_json(400, {"error": "Request body must be valid JSON"})
             return
 
         if route.path.startswith("/api/leaves/") and route.path.endswith("/like"):
@@ -185,28 +231,43 @@ class ProxyHandler(BaseHTTPRequestHandler):
         try:
             start = time.monotonic()
             body = self.read_json_body()
-            body["model"] = DEFAULT_MODEL
-            upstream = self.forward_chat_completions(body)
+            account_key = self.resolve_account_key(payload=body)
+            app_user = None
+            if account_key:
+                app_user = app_user_service.upsert(
+                    {
+                        "accountKey": account_key,
+                        "nickname": body.get("nickname", ""),
+                        "bio": body.get("bio", ""),
+                    }
+                )
+            forward_body = self.sanitize_chat_completion_body(body)
+            forward_body["model"] = DEFAULT_MODEL
+            upstream = self.forward_chat_completions(forward_body)
             ai_history_service.record(
                 model=DEFAULT_MODEL,
-                request_body=body,
+                request_body=forward_body,
                 response_body=upstream,
                 status="success",
                 error_message="",
                 latency_ms=int((time.monotonic() - start) * 1000),
                 client_ip=self.client_address[0],
+                app_user_id=str(app_user["id"]) if app_user else None,
+                account_key=account_key,
             )
             self.send_json(200, upstream)
         except urllib.error.HTTPError as exc:
             error_body = exc.read().decode("utf-8", errors="replace")
             ai_history_service.record(
                 model=DEFAULT_MODEL,
-                request_body=locals().get("body", {}),
+                request_body=locals().get("forward_body", locals().get("body", {})),
                 response_body=None,
                 status="upstream_error",
                 error_message=error_body or exc.reason,
                 latency_ms=int((time.monotonic() - locals().get("start", time.monotonic())) * 1000),
                 client_ip=self.client_address[0],
+                app_user_id=str(locals().get("app_user", {}).get("id")) if locals().get("app_user") else None,
+                account_key=locals().get("account_key", ""),
             )
             self.send_json(
                 exc.code,
@@ -222,17 +283,31 @@ class ProxyHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             ai_history_service.record(
                 model=DEFAULT_MODEL,
-                request_body=locals().get("body", {}),
+                request_body=locals().get("forward_body", locals().get("body", {})),
                 response_body=None,
                 status="failed",
                 error_message=str(exc),
                 latency_ms=int((time.monotonic() - locals().get("start", time.monotonic())) * 1000),
                 client_ip=self.client_address[0],
+                app_user_id=str(locals().get("app_user", {}).get("id")) if locals().get("app_user") else None,
+                account_key=locals().get("account_key", ""),
             )
             self.send_json(500, {"error": str(exc)})
 
     def do_DELETE(self) -> None:
         route = urlparse(self.path)
+        if route.path.startswith("/api/sessions/"):
+            session_id = route.path.removeprefix("/api/sessions/").strip("/")
+            query = parse_qs(route.query)
+            account_key = self.resolve_account_key(query=query)
+            if not account_key:
+                self.send_json(400, {"error": "accountKey is required"})
+                return
+            try:
+                self.send_json(200, chat_session_service.delete_session(session_id, account_key))
+            except AppUserError as exc:
+                self.send_json(400, {"error": str(exc)})
+            return
         if route.path.startswith("/api/leaves/"):
             leaf_id = route.path.removeprefix("/api/leaves/").strip("/")
             self.delete_leaf_as_admin(leaf_id)
@@ -269,6 +344,38 @@ class ProxyHandler(BaseHTTPRequestHandler):
         if not isinstance(parsed, dict):
             raise ValueError("Request body must be a JSON object")
         return parsed
+
+    def resolve_account_key(
+        self,
+        payload: dict[str, Any] | None = None,
+        query: dict[str, list[str]] | None = None,
+    ) -> str:
+        header_key = self.headers.get("X-Account-Key") or self.headers.get("X-User-Id") or ""
+        if header_key.strip():
+            return header_key.strip()
+        if query:
+            query_key = query.get("accountKey", [""])[0] or query.get("userId", [""])[0]
+            if query_key.strip():
+                return query_key.strip()
+        if payload:
+            payload_key = str(payload.get("accountKey") or payload.get("account_key") or payload.get("userId") or "")
+            if payload_key.strip():
+                return payload_key.strip()
+        return ""
+
+    def sanitize_chat_completion_body(self, body: dict[str, Any]) -> dict[str, Any]:
+        blocked_keys = {
+            "accountKey",
+            "account_key",
+            "userId",
+            "user_id",
+            "nickname",
+            "bio",
+            "provider",
+            "externalId",
+            "external_id",
+        }
+        return {key: value for key, value in body.items() if key not in blocked_keys}
 
     def require_admin(self) -> dict[str, Any]:
         user = auth_service.require_user(self.headers.get("Authorization"))
@@ -333,8 +440,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
     def send_cors_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Id, X-Account-Key")
 
     def log_message(self, format: str, *args: Any) -> None:
         print("%s - %s" % (self.address_string(), format % args))
