@@ -130,5 +130,7 @@ export struct IntrospectionWidget {
       .position({ x: 16, y: 36 })
       .zIndex(99)
     }
+    .width('100%')
+    .height('100%')
   }
 }

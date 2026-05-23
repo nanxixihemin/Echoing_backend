@@ -165,7 +165,7 @@ struct Index {
 
       if (this.activeTool === 'none') {
         Column() {
-          Blank().height(100)
+          Blank().height(140)
 
           Row({ space: 16 }) {
             this.MagicButton('\u5185\u7701', '#FF6B6B', (): void => {
@@ -184,7 +184,7 @@ struct Index {
               this.activeTool = 'spinner';
             })
           }
-          .margin({ bottom: 40 })
+          Blank().height(50)
 
           Column() {
             Row() {
@@ -215,7 +215,7 @@ struct Index {
             })
           }
           .width('90%')
-          .margin({ top: 10 })
+          Blank()
         }
         .width('100%')
         .height('100%')
