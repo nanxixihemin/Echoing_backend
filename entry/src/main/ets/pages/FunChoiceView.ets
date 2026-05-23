@@ -386,7 +386,7 @@ struct FunChoiceView {
       .scrollBar(BarState.Off)
     }
     .width('100%')
-    .height('100%')
+    .layoutWeight(1)
   }
 
   @Builder
@@ -621,7 +621,7 @@ struct FunChoiceView {
       .backgroundColor('#F0F5FA')
     }
     .width('100%')
-    .height('100%')
+    .layoutWeight(1)
   }
 
   @Builder
@@ -729,7 +729,7 @@ struct FunChoiceView {
       }
     }
     .width('100%')
-    .height('100%')
+    .layoutWeight(1)
   }
 
   @Builder
