@@ -143,8 +143,6 @@ struct Index {
         // 功能入口
         this.ActionSection()
 
-        Blank()
-
         // 暖心语
         this.QuoteSection()
 
@@ -188,7 +186,7 @@ struct Index {
         Blank()
       }
       .width('100%')
-      .margin({ top: 0, bottom: 12 })
+      .margin({ top: 0, bottom: 8 })
 
       Text(this.greeting)
         .fontSize(32)
@@ -203,7 +201,7 @@ struct Index {
     .width('100%')
     .alignItems(HorizontalAlign.Start)
     // 增加顶部 padding 到 60 甚至 72，避开全面屏沉浸式状态栏 (expandSafeArea)
-    .padding({ top: 72, bottom: 28 })
+    .padding({ top: 48, bottom: 16 })
   }
 
   @Builder
