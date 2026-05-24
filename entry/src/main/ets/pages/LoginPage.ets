@@ -341,6 +341,7 @@ struct LoginPage {
     .height('100%')
     .backgroundColor(M_BG)
     .alignItems(HorizontalAlign.Center)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 
   // ---- 登录表单区 ----
