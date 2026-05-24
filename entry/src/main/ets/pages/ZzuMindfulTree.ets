@@ -59,17 +59,17 @@ struct Index {
   private updateGreeting(): void {
     const hour: number = new Date().getHours();
     if (hour < 6) {
-      this.greeting = '夜深了 🌙';
+      this.greeting = '夜深了';
     } else if (hour < 12) {
-      this.greeting = '早上好 ☀️';
+      this.greeting = '早上好';
     } else if (hour < 14) {
-      this.greeting = '中午好 🌤️';
+      this.greeting = '中午好';
     } else if (hour < 18) {
-      this.greeting = '下午好 🌇';
+      this.greeting = '下午好';
     } else if (hour < 22) {
-      this.greeting = '晚上好 🌆';
+      this.greeting = '晚上好';
     } else {
-      this.greeting = '夜深了 🌙';
+      this.greeting = '夜深了';
     }
   }
 
@@ -127,6 +127,12 @@ struct Index {
         .height('100%')
         .objectFit(ImageFit.Cover)
 
+      // 半透明遮罩层 - 动态调节背景亮度以保证文字和卡片的可读性，并衬托出深浅主题的氛围感
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor(this.isDarkTime ? 'rgba(15, 23, 36, 0.78)' : 'rgba(255, 255, 255, 0.25)')
+
       Column() {
         // 顶部时间区域
         this.HeaderSection()
@@ -136,6 +142,8 @@ struct Index {
 
         // 功能入口
         this.ActionSection()
+
+        Blank()
 
         // 暖心语
         this.QuoteSection()
@@ -157,19 +165,21 @@ struct Index {
   @Builder
   HeaderSection() {
     Column({ space: 4 }) {
-      // 顶部导航栏：仅保留更加微弱的返回按钮
+      // 顶部导航栏：精致返回按钮
       Row() {
-        // 极简返回按钮，不加明显底色
         Row() {
           Text('‹')
-            .fontSize(32)
-            .fontWeight(FontWeight.Lighter)
-            .fontColor(this.getTextTertiary())
-            .margin({ top: -4, left: -4 })
+            .fontSize(26)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.getTextPrimary())
+            .margin({ top: -3 })
         }
         .width(36)
         .height(36)
-        .justifyContent(FlexAlign.Start)
+        .borderRadius(18)
+        .backgroundColor(this.isDarkTime ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)')
+        .border({ width: 1, color: this.isDarkTime ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)' })
+        .justifyContent(FlexAlign.Center)
         .alignItems(VerticalAlign.Center)
         .onClick(() => {
           router.back()
@@ -257,6 +267,7 @@ struct Index {
     .backgroundColor(this.getCardBg())
     .borderRadius(14)
     .padding({ left: 8, right: 8 })
+    .border({ width: 1, color: this.isDarkTime ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' })
     .shadow({
       radius: 12,
       color: this.isDarkTime ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.04)',
@@ -299,6 +310,7 @@ struct Index {
       .padding({ left: 20, right: 20, top: 22, bottom: 22 })
       .backgroundColor(this.getCardBg())
       .borderRadius(16)
+      .border({ width: 1, color: this.isDarkTime ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' })
       .shadow({
         radius: 12,
         color: this.isDarkTime ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.04)',
@@ -344,6 +356,7 @@ struct Index {
       .padding({ left: 20, right: 20, top: 22, bottom: 22 })
       .backgroundColor(this.getCardBg())
       .borderRadius(16)
+      .border({ width: 1, color: this.isDarkTime ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' })
       .shadow({
         radius: 12,
         color: this.isDarkTime ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.04)',
@@ -431,7 +444,7 @@ struct Index {
     }
     .width('100%')
     .padding(20)
-    .margin({ top: 120 }) // 增加间隔，将其更靠下一点，留出呼吸感
+    .margin({ top: 24 }) // 增加间隔，将其更靠下一点，留出呼吸感
     .backgroundColor(this.getCurrentTheme()[0])
     .borderRadius(20)
     .shadow({
